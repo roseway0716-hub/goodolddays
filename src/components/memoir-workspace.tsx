@@ -8,6 +8,7 @@ import {
   STORAGE_KEY,
   chapters,
   createInitialDraft,
+  mergeDraftWithDefaults,
   type BiographyDraft,
   type ChapterDefinition,
   type PhotoItem,
@@ -58,14 +59,7 @@ export function MemoirWorkspace() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as BiographyDraft;
-        setDraft({
-          ...createInitialDraft(),
-          ...parsed,
-          chapters: {
-            ...createInitialDraft().chapters,
-            ...parsed.chapters,
-          },
-        });
+        setDraft(mergeDraftWithDefaults(parsed));
       } catch {
         window.localStorage.removeItem(STORAGE_KEY);
       }
@@ -109,6 +103,13 @@ export function MemoirWorkspace() {
     updateChapter(chapterId, (current) => ({
       ...current,
       rawInput,
+    }));
+  };
+
+  const updateAiContent = (chapterId: string, aiContent: string) => {
+    updateChapter(chapterId, (current) => ({
+      ...current,
+      aiContent,
     }));
   };
 
@@ -226,6 +227,9 @@ export function MemoirWorkspace() {
             storagePath: data.storagePath,
             caption: "",
             orderIndex: existing.length + index,
+            insertAfterParagraph: existing.length + index,
+            annotation: "",
+            showAnnotation: false,
           });
         } else {
           const fallbackUrl = await fileToDataUrl(file);
@@ -235,6 +239,9 @@ export function MemoirWorkspace() {
             storagePath: null,
             caption: "",
             orderIndex: existing.length + index,
+            insertAfterParagraph: existing.length + index,
+            annotation: "",
+            showAnnotation: false,
           });
         }
       }
@@ -543,6 +550,7 @@ export function MemoirWorkspace() {
                   rawInput={draft.chapters[chapter.id].rawInput}
                   selectedStyle={draft.authorStyle}
                   onGenerate={() => generateChapter(chapter)}
+                  onAiContentChange={(value) => updateAiContent(chapter.id, value)}
                   onPhotoCaptionChange={updatePhotoCaption}
                   onPhotoDelete={deletePhoto}
                   onPhotoReorder={reorderPhotos}
