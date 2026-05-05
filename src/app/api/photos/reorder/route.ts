@@ -7,6 +7,9 @@ type ReorderPayload = {
     orderIndex: number;
     caption: string;
     url: string;
+    insertAfterParagraph: number;
+    annotation: string;
+    showAnnotation: boolean;
     storagePath?: string | null;
   }>;
 };
@@ -30,6 +33,9 @@ export async function POST(request: Request) {
     url: photo.url,
     caption: photo.caption,
     order_index: photo.orderIndex,
+    insert_after_paragraph: photo.insertAfterParagraph,
+    annotation: photo.annotation,
+    show_annotation: photo.showAnnotation,
     storage_path: photo.storagePath || null,
   }));
 
