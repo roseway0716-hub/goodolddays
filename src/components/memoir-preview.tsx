@@ -1,36 +1,247 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, BookText } from "lucide-react";
-import { useEffect, useState } from "react";
-import { STORAGE_KEY, chapters, createInitialDraft, type BiographyDraft } from "@/lib/biography";
+import { ArrowLeft, BookText, Image as ImageIcon, MessageSquareText } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  STORAGE_KEY,
+  chapters,
+  createInitialDraft,
+  mergeDraftWithDefaults,
+  type BiographyDraft,
+  type PhotoItem,
+} from "@/lib/biography";
 
 function styleLabel(style: BiographyDraft["authorStyle"]) {
   return style === "YuHua" ? "余华风格" : "刘震云风格";
 }
 
+function normalizeParagraphIndex(index: number, paragraphCount: number) {
+  return Math.max(0, Math.min(index, paragraphCount));
+}
+
+function splitContentToParagraphs(content: string) {
+  const paragraphs = content
+    .split(/\n+/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
+  return paragraphs.length ? paragraphs : ["这一章还没有整理出正文。"];
+}
+
+type PhotoPlacementControlProps = {
+  chapterId: string;
+  paragraphs: string[];
+  photo: PhotoItem;
+  photoIndex: number;
+  onPhotoUpdate: (chapterId: string, photoId: string, patch: Partial<PhotoItem>) => void;
+};
+
+function PhotoPlacementControl({
+  chapterId,
+  paragraphs,
+  photo,
+  photoIndex,
+  onPhotoUpdate,
+}: PhotoPlacementControlProps) {
+  const maxPosition = paragraphs.length;
+
+  return (
+    <div className="rounded-[20px] border border-line/80 bg-white/55 p-4">
+      <div className="flex items-start gap-4">
+        <div className="h-16 w-16 shrink-0 overflow-hidden rounded-[14px] border border-line bg-white">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img alt={photo.caption || `图片 ${photoIndex + 1}`} className="h-full w-full object-cover" src={photo.url} />
+        </div>
+        <div className="min-w-0 flex-1 space-y-3">
+          <div>
+            <p className="text-sm font-medium text-ink">图片 {String(photoIndex + 1).padStart(2, "0")}</p>
+            <p className="text-xs leading-6 text-ink/50">{photo.caption || "未填写图片标签"}</p>
+          </div>
+
+          <label className="block space-y-2">
+            <span className="inline-flex items-center gap-2 text-sm text-ink/70">
+              <ImageIcon className="h-4 w-4 text-rust" />
+              插入位置
+            </span>
+            <select
+              className="w-full rounded-2xl border border-line bg-paper/80 px-3 py-2 text-sm text-ink outline-none transition focus:border-rust/60 focus:bg-white"
+              value={normalizeParagraphIndex(photo.insertAfterParagraph, maxPosition)}
+              onChange={(event) =>
+                onPhotoUpdate(chapterId, photo.id, {
+                  insertAfterParagraph: Number(event.target.value),
+                })
+              }
+            >
+              <option value={0}>正文前</option>
+              {paragraphs.map((_, index) => (
+                <option key={index + 1} value={index + 1}>
+                  第 {index + 1} 段后
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex items-center gap-3 text-sm text-ink/75">
+            <input
+              checked={photo.showAnnotation}
+              className="h-4 w-4 accent-[#6f4b3a]"
+              type="checkbox"
+              onChange={(event) =>
+                onPhotoUpdate(chapterId, photo.id, {
+                  showAnnotation: event.target.checked,
+                })
+              }
+            />
+            显示图片注释
+          </label>
+
+          {photo.showAnnotation ? (
+            <label className="block space-y-2">
+              <span className="inline-flex items-center gap-2 text-sm text-ink/70">
+                <MessageSquareText className="h-4 w-4 text-rust" />
+                注释内容
+              </span>
+              <input
+                className="w-full rounded-2xl border border-line bg-paper/80 px-3 py-2 text-sm text-ink outline-none transition placeholder:text-ink/35 focus:border-rust/60 focus:bg-white"
+                placeholder="例如：这是外公第一次去县城时拍的照片。"
+                value={photo.annotation}
+                onChange={(event) =>
+                  onPhotoUpdate(chapterId, photo.id, {
+                    annotation: event.target.value,
+                  })
+                }
+              />
+            </label>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type ChapterBodyProps = {
+  chapterTitle: string;
+  content: string;
+  photos: PhotoItem[];
+};
+
+function ChapterBody({ chapterTitle, content, photos }: ChapterBodyProps) {
+  const paragraphs = useMemo(() => splitContentToParagraphs(content), [content]);
+  const photosByParagraph = useMemo(() => {
+    const grouped = new Map<number, PhotoItem[]>();
+
+    for (const photo of photos) {
+      const key = normalizeParagraphIndex(photo.insertAfterParagraph, paragraphs.length);
+      const current = grouped.get(key) ?? [];
+      current.push(photo);
+      grouped.set(key, current);
+    }
+
+    for (const value of grouped.values()) {
+      value.sort((left, right) => left.orderIndex - right.orderIndex);
+    }
+
+    return grouped;
+  }, [paragraphs.length, photos]);
+
+  return (
+    <div className="space-y-6">
+      {(photosByParagraph.get(0) ?? []).map((photo) => (
+        <figure key={photo.id} className="space-y-3">
+          <div className="overflow-hidden rounded-[20px] border border-line bg-white">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img alt={photo.caption || chapterTitle} className="aspect-[4/3] w-full object-cover" src={photo.url} />
+          </div>
+          {photo.showAnnotation && photo.annotation.trim() ? (
+            <figcaption className="text-sm italic leading-7 text-ink/45">{photo.annotation}</figcaption>
+          ) : null}
+        </figure>
+      ))}
+
+      {paragraphs.map((paragraph, index) => (
+        <div key={`${chapterTitle}-${index}`} className="space-y-6">
+          <p className="whitespace-pre-wrap text-[16px] leading-9 text-ink/82">{paragraph}</p>
+          {(photosByParagraph.get(index + 1) ?? []).map((photo) => (
+            <figure key={photo.id} className="space-y-3">
+              <div className="overflow-hidden rounded-[20px] border border-line bg-white">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img alt={photo.caption || chapterTitle} className="aspect-[4/3] w-full object-cover" src={photo.url} />
+              </div>
+              {photo.showAnnotation && photo.annotation.trim() ? (
+                <figcaption className="text-sm italic leading-7 text-ink/45">{photo.annotation}</figcaption>
+              ) : null}
+            </figure>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function MemoirPreview() {
   const [draft, setDraft] = useState<BiographyDraft>(createInitialDraft);
+  const [hasHydrated, setHasHydrated] = useState(false);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
 
-    if (!saved) return;
+    if (!saved) {
+      setHasHydrated(true);
+      return;
+    }
 
     try {
       const parsed = JSON.parse(saved) as BiographyDraft;
-      setDraft({
-        ...createInitialDraft(),
-        ...parsed,
-        chapters: {
-          ...createInitialDraft().chapters,
-          ...parsed.chapters,
-        },
-      });
+      setDraft(mergeDraftWithDefaults(parsed));
     } catch {
       window.localStorage.removeItem(STORAGE_KEY);
+    } finally {
+      setHasHydrated(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (!hasHydrated) return;
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+  }, [draft, hasHydrated]);
+
+  const updateChapterPhoto = async (
+    chapterId: string,
+    photoId: string,
+    patch: Partial<PhotoItem>,
+  ) => {
+    const chapterDraft = draft.chapters[chapterId];
+    const nextPhotos = chapterDraft.photos.map((photo) =>
+      photo.id === photoId ? { ...photo, ...patch } : photo,
+    );
+
+    setDraft((current) => ({
+      ...current,
+      chapters: {
+        ...current.chapters,
+        [chapterId]: {
+          ...current.chapters[chapterId],
+          photos: current.chapters[chapterId].photos.map((photo) =>
+            photo.id === photoId ? { ...photo, ...patch } : photo,
+          ),
+        },
+      },
+    }));
+
+    if (!chapterDraft.id) return;
+
+    await fetch("/api/photos/reorder", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        chapterId: chapterDraft.id,
+        photos: nextPhotos,
+      }),
+    }).catch(() => null);
+  };
 
   return (
     <main className="min-h-screen bg-paper px-4 py-8 md:px-8 md:py-12">
@@ -75,6 +286,11 @@ export function MemoirPreview() {
           <div className="mt-12 space-y-12">
             {chapters.map((chapter) => {
               const chapterDraft = draft.chapters[chapter.id];
+              const chapterContent = chapterDraft.aiContent || chapterDraft.rawInput || "";
+              const orderedPhotos = chapterDraft.photos
+                .slice()
+                .sort((left, right) => left.orderIndex - right.orderIndex);
+              const paragraphs = splitContentToParagraphs(chapterContent);
 
               return (
                 <section key={chapter.id} className="border-b border-line/70 pb-12 last:border-none">
@@ -89,32 +305,28 @@ export function MemoirPreview() {
                   </div>
 
                   <div className="mt-6 space-y-6">
-                    <p className="whitespace-pre-wrap text-[16px] leading-9 text-ink/82">
-                      {chapterDraft.aiContent || chapterDraft.rawInput || "这一章还没有整理出正文。"}
-                    </p>
-
-                    {chapterDraft.photos.length > 0 ? (
-                      <div className="grid gap-5 md:grid-cols-2">
-                        {chapterDraft.photos
-                          .slice()
-                          .sort((left, right) => left.orderIndex - right.orderIndex)
-                          .map((photo) => (
-                            <figure key={photo.id} className="space-y-3">
-                              <div className="overflow-hidden rounded-[20px] border border-line bg-white">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  alt={photo.caption || chapter.title}
-                                  className="aspect-[4/3] w-full object-cover"
-                                  src={photo.url}
-                                />
-                              </div>
-                              <figcaption className="text-sm leading-7 text-ink/60">
-                                {photo.caption || "未添加照片标签"}
-                              </figcaption>
-                            </figure>
+                    {orderedPhotos.length > 0 ? (
+                      <div className="space-y-4 rounded-[24px] border border-line/80 bg-white/40 p-5">
+                        <div className="flex items-center gap-2 text-sm font-medium text-ink">
+                          <BookText className="h-4 w-4 text-rust" />
+                          图片插入与注释
+                        </div>
+                        <div className="grid gap-3">
+                          {orderedPhotos.map((photo, photoIndex) => (
+                            <PhotoPlacementControl
+                              key={photo.id}
+                              chapterId={chapter.id}
+                              paragraphs={paragraphs}
+                              photo={photo}
+                              photoIndex={photoIndex}
+                              onPhotoUpdate={updateChapterPhoto}
+                            />
                           ))}
+                        </div>
                       </div>
                     ) : null}
+
+                    <ChapterBody chapterTitle={chapter.title} content={chapterContent} photos={orderedPhotos} />
                   </div>
                 </section>
               );
