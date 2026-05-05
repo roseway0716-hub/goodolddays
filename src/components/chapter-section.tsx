@@ -7,7 +7,7 @@ type ChapterSectionProps = {
   index: number;
   title: string;
   ageRange: string;
-  prompt: string;
+  prompt: string[];
   hint: string;
   rawInput: string;
   aiContent: string;
@@ -17,6 +17,7 @@ type ChapterSectionProps = {
   error: string | null;
   selectedStyle: AuthorStyle;
   onRawInputChange: (value: string) => void;
+  onAiContentChange: (value: string) => void;
   onGenerate: () => void;
   onPhotoUpload: (chapterId: string, files: File[]) => Promise<void>;
   onPhotoReorder: (chapterId: string, photos: PhotoItem[]) => void | Promise<void>;
@@ -39,6 +40,7 @@ export function ChapterSection({
   error,
   selectedStyle,
   onRawInputChange,
+  onAiContentChange,
   onGenerate,
   onPhotoUpload,
   onPhotoReorder,
@@ -66,9 +68,16 @@ export function ChapterSection({
           <div className="rounded-[24px] border border-line/80 bg-white/35 p-5">
             <div className="mb-3 flex items-center gap-2 text-sm font-medium text-ink">
               <Mic2 className="h-4 w-4 text-rust" />
-              时代钩子
+              引导问题（帮助您进行询问或回忆）
             </div>
-            <p className="text-[15px] leading-8 text-ink/70">{prompt}</p>
+            <ul className="space-y-2 text-[15px] leading-8 text-ink/70">
+              {prompt.map((question) => (
+                <li key={question} className="flex gap-3">
+                  <span className="pt-[2px] text-rust/80">•</span>
+                  <span>{question}</span>
+                </li>
+              ))}
+            </ul>
           </div>
 
           <label className="block space-y-3">
@@ -134,10 +143,16 @@ export function ChapterSection({
           </div>
         </article>
         <article className="rounded-[24px] border border-rust/20 bg-[#fcfaf5] p-5">
-          <div className="mb-3 text-sm font-medium text-ink">润色稿</div>
-          <div className="min-h-[220px] whitespace-pre-wrap text-[15px] leading-8 text-ink/78">
-            {aiContent || (isGenerating ? "正在整理这段回忆..." : "点击“生成本章”后，这里会实时出现文学化整理结果。")}
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="text-sm font-medium text-ink">润色稿</div>
+            <div className="text-xs text-ink/50">可直接修改</div>
           </div>
+          <textarea
+            className="min-h-[220px] w-full resize-y border-0 bg-transparent p-0 text-[15px] leading-8 text-ink/78 outline-none placeholder:text-ink/35"
+            placeholder={isGenerating ? "正在整理这段回忆..." : "点击“生成本章”后，这里会实时出现文学化整理结果。"}
+            value={aiContent}
+            onChange={(event) => onAiContentChange(event.target.value)}
+          />
         </article>
       </div>
     </section>
