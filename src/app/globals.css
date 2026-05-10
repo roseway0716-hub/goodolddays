@@ -47,3 +47,174 @@ body::before {
     #f7f2e8;
   box-shadow: 0 24px 60px rgba(73, 50, 34, 0.14);
 }
+
+.book-room {
+  background:
+    radial-gradient(circle at top, rgba(159, 115, 81, 0.2), transparent 28%),
+    linear-gradient(180deg, rgba(255, 251, 243, 0.55), rgba(234, 224, 209, 0.12)),
+    #efe4d2;
+}
+
+.book-cover {
+  position: relative;
+  overflow: hidden;
+  border-radius: 40px;
+  padding: 22px;
+  background:
+    linear-gradient(135deg, rgba(50, 25, 15, 0.28), transparent 45%),
+    linear-gradient(160deg, #7e523a, #5e3828 54%, #45271d);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 234, 205, 0.2),
+    0 30px 70px rgba(53, 29, 18, 0.34);
+}
+
+.book-cover::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(255, 236, 208, 0.08), transparent 10%, transparent 90%, rgba(0, 0, 0, 0.12)),
+    radial-gradient(circle at 12% 20%, rgba(255, 240, 218, 0.16), transparent 18%);
+}
+
+.book-cover__plate {
+  position: relative;
+  min-height: 420px;
+  border-radius: 28px;
+  border: 1px solid rgba(239, 214, 176, 0.24);
+  padding: 48px 28px;
+  text-align: center;
+  background:
+    linear-gradient(180deg, rgba(255, 247, 232, 0.08), rgba(255, 247, 232, 0.02)),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 245, 228, 0.05) 0,
+      rgba(255, 245, 228, 0.05) 2px,
+      transparent 2px,
+      transparent 12px
+    );
+}
+
+.book-page {
+  position: relative;
+  overflow: hidden;
+  border-radius: 34px;
+  border: 1px solid #d6c5ab;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.66), rgba(246, 238, 223, 0.95)),
+    #f9f2e4;
+  box-shadow:
+    0 24px 60px rgba(69, 46, 29, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.book-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 1px 1px, rgba(122, 92, 63, 0.06) 1px, transparent 0),
+    linear-gradient(90deg, rgba(112, 76, 46, 0.07), transparent 12%, transparent 88%, rgba(112, 76, 46, 0.04));
+  background-size: 14px 14px, 100% 100%;
+  opacity: 0.85;
+  mix-blend-mode: multiply;
+}
+
+.book-page__edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 24px;
+  width: 14px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(152, 111, 79, 0.18), rgba(86, 55, 34, 0.06));
+  filter: blur(0.2px);
+  opacity: 0.9;
+}
+
+.book-page--left .book-page__edge {
+  right: 24px;
+  left: auto;
+}
+
+.book-page__content {
+  position: relative;
+  padding: 36px 24px 30px 40px;
+}
+
+.book-page--ghost {
+  min-height: 240px;
+  opacity: 0.28;
+}
+
+.book-spread {
+  position: relative;
+  display: grid;
+  gap: 20px;
+}
+
+.book-spread__gutter {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .book-cover__plate {
+    min-height: 520px;
+    padding: 72px 64px;
+  }
+
+  .book-page__content {
+    padding: 52px 64px 40px 88px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .book-spread {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0;
+    align-items: stretch;
+    padding: 18px 22px;
+    border-radius: 42px;
+    background:
+      radial-gradient(circle at center, rgba(113, 78, 52, 0.08), transparent 22%),
+      linear-gradient(180deg, rgba(255, 252, 246, 0.42), rgba(222, 207, 186, 0.16));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.48);
+  }
+
+  .book-spread__gutter {
+    position: absolute;
+    top: 18px;
+    bottom: 18px;
+    left: 50%;
+    z-index: 2;
+    display: block;
+    width: 26px;
+    transform: translateX(-50%);
+    border-radius: 999px;
+    background:
+      linear-gradient(90deg, rgba(58, 32, 18, 0.16), rgba(255, 248, 237, 0.45) 50%, rgba(58, 32, 18, 0.16));
+    filter: blur(0.2px);
+    opacity: 0.9;
+  }
+
+  .book-spread .book-page {
+    min-height: 100%;
+    border-radius: 34px 10px 10px 34px;
+  }
+
+  .book-spread .book-page--right,
+  .book-spread .book-page--ghost {
+    border-radius: 10px 34px 34px 10px;
+  }
+
+  .book-spread .book-page--left {
+    margin-right: 12px;
+  }
+
+  .book-spread .book-page--right,
+  .book-spread .book-page--ghost {
+    margin-left: 12px;
+  }
+}

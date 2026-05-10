@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { BookOpen, ChevronRight, Library, Save, ScrollText, Sparkles } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChapterSection } from "@/components/chapter-section";
 import {
   STORAGE_KEY,
@@ -19,6 +19,8 @@ type SaveResponse = {
   biographyId: string;
   chapterIds: Record<string, string>;
 };
+
+const FLOATING_NAV_STORAGE_KEY = "time-biography-floating-nav";
 
 function toSerializableDraft(draft: BiographyDraft) {
   return {
@@ -52,9 +54,31 @@ export function MemoirWorkspace() {
   const [hasHydrated, setHasHydrated] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [activeChapterId, setActiveChapterId] = useState(chapters[0]?.id ?? "");
+  const [navPosition, setNavPosition] = useState({ x: 24, y: 180 });
+  const [navReady, setNavReady] = useState(false);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const isDraggingRef = useRef(false);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
+    const savedFloatingNav = window.localStorage.getItem(FLOATING_NAV_STORAGE_KEY);
+
+    if (savedFloatingNav) {
+      try {
+        const parsed = JSON.parse(savedFloatingNav) as { x?: number; y?: number };
+        if (typeof parsed.x === "number" && typeof parsed.y === "number") {
+          setNavPosition({ x: parsed.x, y: parsed.y });
+        }
+      } catch {
+        window.localStorage.removeItem(FLOATING_NAV_STORAGE_KEY);
+      }
+    } else if (typeof window !== "undefined") {
+      setNavPosition({
+        x: Math.max(16, window.innerWidth - 308),
+        y: 148,
+      });
+    }
 
     if (saved) {
       try {
@@ -66,12 +90,75 @@ export function MemoirWorkspace() {
     }
 
     setHasHydrated(true);
+    setNavReady(true);
   }, []);
 
   useEffect(() => {
     if (!hasHydrated) return;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toSerializableDraft(draft)));
   }, [draft, hasHydrated]);
+
+  useEffect(() => {
+    if (!navReady) return;
+    window.localStorage.setItem(FLOATING_NAV_STORAGE_KEY, JSON.stringify(navPosition));
+  }, [navPosition, navReady]);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visibleEntries = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((left, right) => right.intersectionRatio - left.intersectionRatio);
+
+        if (visibleEntries[0]?.target.id) {
+          setActiveChapterId(visibleEntries[0].target.id);
+        }
+      },
+      {
+        rootMargin: "-18% 0px -55% 0px",
+        threshold: [0.2, 0.35, 0.55],
+      },
+    );
+
+    const chapterElements = chapters
+      .map((chapter) => document.getElementById(chapter.id))
+      .filter((element): element is HTMLElement => Boolean(element));
+
+    chapterElements.forEach((element) => observer.observe(element));
+
+    return () => observer.disconnect();
+  }, [hasHydrated]);
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!isDraggingRef.current) return;
+
+      const width = 280;
+      const height = 440;
+      const nextX = Math.min(
+        Math.max(12, event.clientX - dragOffsetRef.current.x),
+        window.innerWidth - width - 12,
+      );
+      const nextY = Math.min(
+        Math.max(88, event.clientY - dragOffsetRef.current.y),
+        window.innerHeight - height - 12,
+      );
+
+      setNavPosition({ x: nextX, y: nextY });
+    };
+
+    const handlePointerUp = () => {
+      isDraggingRef.current = false;
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, []);
 
   const chapterCountWithContent = useMemo(
     () =>
@@ -372,11 +459,103 @@ export function MemoirWorkspace() {
     }
   };
 
+  const jumpToChapter = (chapterId: string) => {
+    document.getElementById(chapterId)?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+    setActiveChapterId(chapterId);
+  };
+
+  const startDraggingNav = (event: React.PointerEvent<HTMLDivElement>) => {
+    isDraggingRef.current = true;
+    dragOffsetRef.current = {
+      x: event.clientX - navPosition.x,
+      y: event.clientY - navPosition.y,
+    };
+  };
+
   return (
     <main className="relative isolate px-4 pb-16 pt-6 md:px-8 md:pb-24 md:pt-10">
+      <div className="fixed right-4 top-4 z-40 md:right-8 md:top-6">
+        <Link
+          className="inline-flex items-center justify-center gap-2 rounded-full border border-rust/25 bg-[#fffaf2]/92 px-5 py-3 text-sm text-ink shadow-[0_14px_36px_rgba(82,58,39,0.14)] backdrop-blur-sm transition hover:bg-white"
+          href="/preview"
+        >
+          <BookOpen className="h-4 w-4" />
+          成书预览
+        </Link>
+      </div>
+
+      <div
+        className="fixed z-30 hidden w-[280px] overflow-hidden rounded-[28px] border border-[#d8c7b2] bg-[rgba(255,248,238,0.94)] shadow-[0_24px_60px_rgba(79,55,35,0.18)] backdrop-blur-md xl:block"
+        style={{ left: `${navPosition.x}px`, top: `${navPosition.y}px` }}
+      >
+        <div
+          className="cursor-grab border-b border-line/80 bg-[rgba(244,233,217,0.9)] px-5 py-4 active:cursor-grabbing"
+          role="button"
+          tabIndex={0}
+          onPointerDown={startDraggingNav}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.3em] text-rust/78">五段式采集</p>
+              <p className="mt-1 text-sm text-ink/62">可拖动，也可快速跳转到任一章节。</p>
+            </div>
+            <div className="space-y-1">
+              <span className="block h-1 w-8 rounded-full bg-[#b89479]/80" />
+              <span className="block h-1 w-8 rounded-full bg-[#b89479]/55" />
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-2 px-4 py-4">
+          {chapters.map((chapter) => {
+            const filled =
+              draft.chapters[chapter.id].rawInput.trim() || draft.chapters[chapter.id].aiContent.trim();
+            const isActive = activeChapterId === chapter.id;
+
+            return (
+              <button
+                key={chapter.id}
+                className={[
+                  "flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left text-sm transition",
+                  isActive
+                    ? "bg-[#6f4b3a] text-white shadow-sm"
+                    : "bg-white/55 text-ink/78 hover:bg-white",
+                ].join(" ")}
+                type="button"
+                onClick={() => jumpToChapter(chapter.id)}
+              >
+                <span className="min-w-0">
+                  <span className="block font-medium">
+                    {chapter.index}. {chapter.title}
+                  </span>
+                  <span className={["mt-1 block text-xs", isActive ? "text-white/75" : "text-ink/48"].join(" ")}>
+                    {chapter.ageRange}
+                  </span>
+                </span>
+                <span className="flex items-center gap-2">
+                  {filled ? (
+                    <span className={["h-2.5 w-2.5 rounded-full", isActive ? "bg-[#f0dcc5]" : "bg-[#9f6f51]"].join(" ")} />
+                  ) : null}
+                  <ChevronRight className="h-4 w-4 shrink-0" />
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="border-t border-line/80 px-5 py-4">
+          <p className="text-xs leading-6 text-ink/58">
+            已填写 {chapterCountWithContent} / {chapters.length} 个章节
+          </p>
+        </div>
+      </div>
+
       <div className="mx-auto max-w-7xl">
         <section className="paper-panel overflow-hidden rounded-[36px] border border-[#ddcfbe]">
-          <div className="grid gap-10 px-6 py-8 md:px-10 md:py-10 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-14">
+          <div className="grid gap-10 px-6 py-8 md:px-10 md:py-10 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-14 xl:grid-cols-[320px_minmax(0,1fr)]">
             <aside className="space-y-8">
               <div className="space-y-4">
                 <div className="inline-flex items-center gap-2 rounded-full border border-rust/20 bg-white/60 px-3 py-1 text-xs uppercase tracking-[0.3em] text-rust/80">
@@ -493,24 +672,37 @@ export function MemoirWorkspace() {
                 </div>
               </div>
 
-              <div className="rounded-[28px] border border-line/80 bg-[#f7f1e8]/80 p-5">
+              <div className="rounded-[28px] border border-line/80 bg-[#f7f1e8]/80 p-5 xl:hidden">
                 <div className="mb-4 flex items-center gap-2 text-sm font-medium text-ink">
                   <Sparkles className="h-4 w-4 text-rust" />
                   五段式采集
                 </div>
                 <div className="space-y-2">
                   {chapters.map((chapter) => (
-                    <a
+                    <button
                       key={chapter.id}
-                      className="flex items-center justify-between rounded-2xl px-3 py-3 text-sm text-ink/75 transition hover:bg-white/70 hover:text-ink"
-                      href={`#${chapter.id}`}
+                      className={[
+                        "flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left text-sm transition",
+                        activeChapterId === chapter.id
+                          ? "bg-[#6f4b3a] text-white"
+                          : "text-ink/75 hover:bg-white/70 hover:text-ink",
+                      ].join(" ")}
+                      type="button"
+                      onClick={() => jumpToChapter(chapter.id)}
                     >
                       <span>
                         {chapter.index}. {chapter.title}
                       </span>
                       <ChevronRight className="h-4 w-4" />
-                    </a>
+                    </button>
                   ))}
+                </div>
+              </div>
+
+              <div className="rounded-[28px] border border-line/80 bg-[#f7f1e8]/80 p-5">
+                <div className="mb-4 flex items-center gap-2 text-sm font-medium text-ink">
+                  <Sparkles className="h-4 w-4 text-rust" />
+                  草稿操作
                 </div>
                 <div className="mt-5 space-y-3 border-t border-line/80 pt-4">
                   <p className="text-xs leading-6 text-ink/55">
@@ -525,13 +717,6 @@ export function MemoirWorkspace() {
                     <Save className="h-4 w-4" />
                     {isSaving ? "保存中..." : "保存到 Supabase"}
                   </button>
-                  <Link
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-line bg-white/70 px-4 py-2.5 text-sm text-ink transition hover:bg-white"
-                    href="/preview"
-                  >
-                    <BookOpen className="h-4 w-4" />
-                    打开成书预览
-                  </Link>
                   {saveMessage ? <p className="text-xs leading-6 text-ink/55">{saveMessage}</p> : null}
                 </div>
               </div>
